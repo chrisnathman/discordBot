@@ -31,14 +31,27 @@ dClient.on('message', async msg => {
     
     const commandStr = msg.content.substring(2).trim()
     const breakIndex = commandStr.indexOf(' ')
-    const cmd = commandStr.substring(0, breakIndex)
-    const args = commandStr.substring(breakIndex + 1)
+    var cmd = commandStr.substring(0, breakIndex)
+    var args = commandStr.substring(breakIndex + 1)
     if (breakIndex < 0)
     {
-        
+        cmd = args
+        args = ''
     }
     msg.channel.send('command: ' + cmd)
     msg.channel.send('args: ' + args)
 
- //   switch()
+    switch(cmd) {
+        case 'help':
+            cmdHelp(args, msg.channel)
+            break
+        default:
+            msg.channel.send('unrecognized command')
+            msg.channel.send('try >>help')
+    }
 })
+
+function cmdHelp(args, channel) {
+    channel.send('available commands:')
+    channel.send('help - displays information about the bot commands')
+}
