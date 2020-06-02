@@ -1,4 +1,6 @@
 const Discord = require('discord.js')
+const ytdl = require('ytdl-core-discord')
+const yts = require('yt-search')
 
 const {
     prefix,
@@ -8,6 +10,9 @@ const {
 const dClient = new Discord.Client()
 
 const vidQueue = new Map()
+
+var prevSearch = null
+var iteratedIndex = 0
 
 dClient.login(token)
 
@@ -38,12 +43,27 @@ dClient.on('message', async msg => {
         cmd = args
         args = ''
     }
-    msg.channel.send('command: ' + cmd)
-    msg.channel.send('args: ' + args)
+  //  msg.channel.send('command: ' + cmd)
+  //  msg.channel.send('args: ' + args)
 
     switch(cmd) {
         case 'help':
             cmdHelp(args, msg.channel)
+            break
+        case 'search':
+            cmdSearch(args, msg.channel)
+            break
+        case 'play':
+            cmdPlay(args, msg)
+            break
+        case 'skip':
+            cmdSkip(args, msg.channel)
+            break
+        case 'pause':
+            cmdPause(args, msg.channel)
+            break
+        case 'resume':
+            cmdResume(args, msg.channel)
             break
         default:
             msg.channel.send('unrecognized command')
@@ -52,6 +72,109 @@ dClient.on('message', async msg => {
 })
 
 function cmdHelp(args, channel) {
-    channel.send('available commands:')
-    channel.send('help - displays information about the bot commands')
+    channel.send('available commands:\n'
+               + '**help**   - displays information about the bot commands\n'
+               + '**search** - searches youtube with the given arguments\n'
+               + '**play**   - plays the video with the given url or the number of a previous search result <WIP>\n'
+               + '**skip**   - skips the video that is currently playing <WIP>\n'
+               + '**pause**  - pauses the video that is currently playing <WIP>\n'
+               + '**resume** - continues playing a video that was previously pause <WIP>')
+}
+
+async function cmdSearch(args, channel) {
+    var printStr = ''
+    try {
+        const opts = {
+            query: args,
+            pageStart: 1,
+            pageEnd: 1
+        }
+        const r = await yts(opts)
+        prevSearch = r.videos
+
+        var i = 0
+        for (i = iteratedIndex; i < r.videos.length && i < 5; ++i) {
+            printStr += '**' + i + '**' + ' - ' + r.videos[i].title + '\n'
+            iteratedIndex++
+        }
+        channel.send(printStr)
+    }
+    catch (err) {
+        channel.send('a critical error occured')
+        console.log(err)
+    }
+}
+
+async function cmdPlay(args, msg) {
+    msg.channel.send('`WARN - play command still WIP`')
+
+    const vchannel = msg.member.voice.channel
+    if (!vchannel) {
+        msg.channel.send('you must be in a voice channel to play a video!')
+        return
+    }
+
+    const permissions = vchannel.permissionsFor(msg.client.user)
+    if (!permissions.has("CONNECT") || !permissions.has("SPEAK")) {
+        msg.channel.send('I do not have sufficient permissions to play videos in this channel')
+        return
+    }
+
+    if (args === '') {
+        msg.channel.send('nothing given to play')
+        return
+    }
+
+    try {
+        if (await ytdl.validateURL(args)) {
+            const connection = await vchannel.join()
+            connection.play(await ytdl(args), { type: 'opus'})
+            .on("finish", () => {
+                vchannel.leave()
+            })
+            .on("error", error => {
+                console.error(error)
+                vchannel.leave()
+            })
+        }
+        else {
+            const playIndex = parseInt(args, 10)
+            if (isNaN(playIndex) || playIndex < 0) {
+                msg.channel.send('invalid input to play, use **>>search** if you want to search for vids')
+                return
+            }
+
+            if (playIndex >= iteratedIndex) {
+                msg.channel.send('warning: you have selected a result that is not yet visible')
+            }
+            const connection = await vchannel.join()
+            connection.play(await ytdl(prevSearch[playIndex].videoId), { type: 'opus'})
+            .on("finish", () => {
+                vchannel.leave()
+            })
+            .on("error", error => {
+                console.error(error)
+                vchannel.leave()
+            })
+
+        }
+    }
+    catch(err) {
+        console.log(err)
+        msg.channel.send('a critical error occured')
+        vchannel.leave()
+    }
+
+}
+
+async function cmdSkip(args, channel) {
+    channel.send('skipping occurs here (not yet implemented)')
+}
+
+function cmdPause(args, channel) {
+    channel.send('pausing of videos happens here (not yet implemented)')
+}
+
+function cmdResume(args, channel) {
+    channel.send('videos resume here (not yet implemented)')
 }
