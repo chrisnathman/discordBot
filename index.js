@@ -13,6 +13,7 @@ const vidQueue = new Map()
 
 var prevSearch = null
 var iteratedIndex = 0
+var vchannel = null
 
 dClient.login(token)
 
@@ -75,8 +76,8 @@ function cmdHelp(args, channel) {
     channel.send('available commands:\n'
                + '**help**   - displays information about the bot commands\n'
                + '**search** - searches youtube with the given arguments\n'
-               + '**play**   - plays the video with the given url or the number of a previous search result <WIP>\n'
-               + '**skip**   - skips the video that is currently playing <WIP>\n'
+               + '**play**   - plays the video with the given url or the number of a previous search result\n'
+               + '**skip**   - skips the video that is currently playing\n'
                + '**pause**  - pauses the video that is currently playing <WIP>\n'
                + '**resume** - continues playing a video that was previously pause <WIP>')
 }
@@ -106,9 +107,7 @@ async function cmdSearch(args, channel) {
 }
 
 async function cmdPlay(args, msg) {
-    msg.channel.send('`WARN - play command still WIP`')
-
-    const vchannel = msg.member.voice.channel
+    vchannel = msg.member.voice.channel
     if (!vchannel) {
         msg.channel.send('you must be in a voice channel to play a video!')
         return
@@ -134,6 +133,7 @@ async function cmdPlay(args, msg) {
             })
             .on("error", error => {
                 console.error(error)
+                msg.channel.send('playback error')
                 vchannel.leave()
             })
         }
@@ -144,16 +144,23 @@ async function cmdPlay(args, msg) {
                 return
             }
 
+            if (!prevSearch) {
+                msg.channel.send('no previous search to select from, use **>>search** first')
+                return
+            }
+
             if (playIndex >= iteratedIndex) {
                 msg.channel.send('warning: you have selected a result that is not yet visible')
             }
             const connection = await vchannel.join()
+            msg.channel.send('now playing: **' + prevSearch[playIndex].title + '**')
             connection.play(await ytdl(prevSearch[playIndex].videoId), { type: 'opus'})
             .on("finish", () => {
                 vchannel.leave()
             })
             .on("error", error => {
                 console.error(error)
+                msg.channel.send('playback error')
                 vchannel.leave()
             })
 
@@ -168,7 +175,9 @@ async function cmdPlay(args, msg) {
 }
 
 async function cmdSkip(args, channel) {
-    channel.send('skipping occurs here (not yet implemented)')
+    if(vchannel) {
+        vchannel.leave()
+    }
 }
 
 function cmdPause(args, channel) {
