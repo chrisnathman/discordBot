@@ -1,11 +1,15 @@
 const Discord = require('discord.js')
 const ytdl = require('ytdl-core-discord')
 const yts = require('yt-search')
+const appid = require('appid')
+const stringComp = require('string-similarity')
 
 const {
     prefix,
     token,
+    maintainer
 } = require('./config.json')
+const { report } = require('process')
 
 const dClient = new Discord.Client()
 
@@ -32,8 +36,6 @@ dClient.once('disconnect', () => {
 dClient.on('message', async msg => {
     if (msg.author.bot) return;
     if (!msg.content.startsWith(prefix)) return
-
-    //msg.channel.send('msg received')
     
     const commandStr = msg.content.substring(2).trim()
     const breakIndex = commandStr.indexOf(' ')
@@ -44,8 +46,6 @@ dClient.on('message', async msg => {
         cmd = args
         args = ''
     }
-  //  msg.channel.send('command: ' + cmd)
-  //  msg.channel.send('args: ' + args)
 
     switch(cmd) {
         case 'help':
@@ -66,6 +66,9 @@ dClient.on('message', async msg => {
         case 'resume':
             cmdResume(args, msg.channel)
             break
+        case 'players':
+            cmdPlayers(args, msg.channel)
+            break
         default:
             msg.channel.send('unrecognized command')
             msg.channel.send('try >>help')
@@ -79,7 +82,8 @@ function cmdHelp(args, channel) {
                + '**play**   - plays the video with the given url or the number of a previous search result\n'
                + '**skip**   - skips the video that is currently playing\n'
                + '**pause**  - pauses the video that is currently playing <WIP>\n'
-               + '**resume** - continues playing a video that was previously pause <WIP>')
+               + '**resume** - continues playing a video that was previously pause <WIP>\n'
+               + '**players** - displays the player count for a given steam game <WIP>')
 }
 
 async function cmdSearch(args, channel) {
@@ -90,18 +94,26 @@ async function cmdSearch(args, channel) {
             pageStart: 1,
             pageEnd: 1
         }
-        const r = await yts(opts)
-        prevSearch = r.videos
+        yts(opts).then(r => {
+            prevSearch = r.videos
 
-        var i = 0
-        for (i = iteratedIndex; i < r.videos.length && i < 5; ++i) {
-            printStr += '**' + i + '**' + ' - ' + r.videos[i].title + '\n'
-            iteratedIndex++
-        }
-        channel.send(printStr)
+            var i = 0
+            for (i = iteratedIndex; i < r.videos.length && i < 5; ++i) {
+                printStr += '**' + i + '**' + ' - ' + r.videos[i].title + '\n'
+                iteratedIndex++
+            }
+            channel.send(printStr).catch(err => {
+                reportError(channel, '0xAAAA')
+                console.log(err)
+            })
+        }).catch(err => {
+            reportError(channel, '0xBBBB')
+            console.log(err)
+        })
+        
     }
     catch (err) {
-        channel.send('a critical error occured')
+        reportError(channel, '0xCCCC')
         console.log(err)
     }
 }
@@ -167,8 +179,8 @@ async function cmdPlay(args, msg) {
         }
     }
     catch(err) {
+        reportError(channel, '0xDDDD')
         console.log(err)
-        msg.channel.send('a critical error occured')
         vchannel.leave()
     }
 
@@ -186,4 +198,30 @@ function cmdPause(args, channel) {
 
 function cmdResume(args, channel) {
     channel.send('videos resume here (not yet implemented)')
+}
+
+async function cmdPlayers(args, channel) {
+    appid(RegExp(args)).then(games => {
+        if (games.length > 0) {
+            let matchedGames = stringComp.findBestMatch(args, games.map(x => x.name))
+            let bestGame = games[matchedGames.bestMatchIndex]
+            channel.send('Game: ' + bestGame.name + '\nID: ' + bestGame.appid
+                        +'player count:' ).catch(err => {
+                reportError(channel, '0xEEEE')
+                console.log(err)
+            })
+        }
+        else {
+            channel.send('no results found, note that this filters out any results that contain differences'
+                        +' please ensure that your search matches exactly or bug <@' + maintainer +'> to improve it')
+        }
+    }).catch(err => {
+        reportError(channel, '0xFFFF')
+        console.log(err)
+    })
+    //channel.send('Game: ' + game.name + '\nID: ' + game.appid)
+}
+
+function reportError(channel, errorID) {
+    channel.send('<@' + maintainer + '> unknown error: ' + errorID)
 }
