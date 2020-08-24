@@ -3,6 +3,7 @@ const ytdl = require('ytdl-core-discord')
 const yts = require('yt-search')
 const appid = require('appid')
 const stringComp = require('string-similarity')
+const SteamUser = require('steam-user')
 
 const {
     prefix,
@@ -14,6 +15,19 @@ const { report } = require('process')
 const dClient = new Discord.Client()
 
 const vidQueue = new Map()
+
+var client = new SteamUser()
+
+client.logOn()
+
+client.on('loggedOn', () => {
+    console.log('steam login success')
+})
+
+client.on('error', err => {
+    console.log('steam login failed')
+    console.log(err)
+})
 
 var prevSearch = null
 var iteratedIndex = 0
@@ -96,16 +110,26 @@ async function cmdSearch(args, channel) {
         }
         yts(opts).then(r => {
             prevSearch = r.videos
+            iteratedIndex = 0;
 
-            var i = 0
-            for (i = iteratedIndex; i < r.videos.length && i < 5; ++i) {
-                printStr += '**' + i + '**' + ' - ' + r.videos[i].title + '\n'
-                iteratedIndex++
+            if (r.videos.length > 0) {
+                var i = 0
+                for (i = iteratedIndex; i < r.videos.length && i < 5; ++i) {
+                    printStr += '**' + i + '**' + ' - ' + r.videos[i].title + '\n'
+                    iteratedIndex++
+                }
+                channel.send(printStr).catch(err => {
+                    reportError(channel, '0xAAAA')
+                    console.log(err)
+                })
             }
-            channel.send(printStr).catch(err => {
-                reportError(channel, '0xAAAA')
-                console.log(err)
-            })
+            else {
+                prevSearch = null
+                channel.send('no search results for `' + args + '`').catch(err => {
+                    reportError(channel, '0xABCD')
+                    console.log(err)
+                })
+            }
         }).catch(err => {
             reportError(channel, '0xBBBB')
             console.log(err)
@@ -201,13 +225,27 @@ function cmdResume(args, channel) {
 }
 
 async function cmdPlayers(args, channel) {
+    channel.send('Searching Steam...')
+    var printStr = ''
     appid(RegExp(args)).then(games => {
         if (games.length > 0) {
             let matchedGames = stringComp.findBestMatch(args, games.map(x => x.name))
             let bestGame = games[matchedGames.bestMatchIndex]
-            channel.send('Game: ' + bestGame.name + '\nID: ' + bestGame.appid
-                        +'player count:' ).catch(err => {
-                reportError(channel, '0xEEEE')
+            printStr += 'Game: ' + bestGame.name + '\nID: ' + bestGame.appid + '\n'
+            client.getPlayerCount(bestGame.appid, null).then(function(pCount, err) {
+                if (err === null) {
+                    printStr += 'player count: ' + pCount
+                }
+                else {
+                    printStr += 'error retrieving player count'
+                    console.log(err)
+                }
+                channel.send(printStr).catch(err => {
+                    reportError(channel, '0xEEEE')
+                    console.log(err)
+                })
+            }).catch(err => {
+                reportError(channel, '0x1234')
                 console.log(err)
             })
         }
@@ -219,9 +257,8 @@ async function cmdPlayers(args, channel) {
         reportError(channel, '0xFFFF')
         console.log(err)
     })
-    //channel.send('Game: ' + game.name + '\nID: ' + game.appid)
 }
 
 function reportError(channel, errorID) {
-    channel.send('<@' + maintainer + '> unknown error: ' + errorID)
+    channel.send('<@' + maintainer + '> an error occurred: ' + errorID)
 }
